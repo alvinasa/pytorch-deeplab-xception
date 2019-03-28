@@ -27,6 +27,9 @@ def decode_segmap(label_mask, dataset, plot=False):
     elif dataset == 'cityscapes':
         n_classes = 19
         label_colours = get_cityscapes_labels()
+    elif dataset == 'comp5421':
+        n_classes = 8
+        label_colours = get_pascal_labels()
     else:
         raise NotImplementedError
 
