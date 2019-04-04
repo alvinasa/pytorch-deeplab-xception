@@ -7,7 +7,6 @@ from mypath import Path
 from dataloaders import make_data_loader
 from modeling.sync_batchnorm.replicate import patch_replication_callback
 from modeling.deeplab import *
-#from utils.loss import SegmentationLosses
 from loss import SegmentationLosses
 from calculate_weights import calculate_weigths_labels
 from lr_scheduler import LR_Scheduler
@@ -15,7 +14,6 @@ from saver import Saver
 from summaries import TensorboardSummary
 from metrics import Evaluator
 
-# MODIFIED: add packages
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -36,7 +34,6 @@ class Trainer(object):
         self.train_loader, self.val_loader, self.test_loader, self.nclass = make_data_loader(args, **kwargs)
 
         # Define network
-        # MODIFIED: from self.nclass to pretraining dataset num_class
         pre_nclass = 21
         model = DeepLab(num_classes=pre_nclass,
                         backbone=args.backbone,
@@ -71,14 +68,6 @@ class Trainer(object):
         self.scheduler = LR_Scheduler(args.lr_scheduler, args.lr,
                                             args.epochs, len(self.train_loader))
 
-        """
-        # Using cuda
-        if args.cuda:
-            self.model = torch.nn.DataParallel(self.model, device_ids=self.args.gpu_ids)
-            patch_replication_callback(self.model)
-            self.model = self.model.cuda()
-        """
-
         # Resuming checkpoint
         self.best_pred = 0.0
         if args.resume is not None:
@@ -87,19 +76,11 @@ class Trainer(object):
             checkpoint = torch.load(args.resume)
             args.start_epoch = checkpoint['epoch']
             
-            """
-            if args.cuda:
-                self.model.module.load_state_dict(checkpoint['state_dict'])
-            else:
-                self.model.load_state_dict(checkpoint['state_dict'])
-            """
             self.model.load_state_dict(checkpoint['state_dict'])
 
             if not args.ft:
                 self.optimizer.load_state_dict(checkpoint['optimizer'])
-            
-            # MODIFIED: ignore best pred from pretraining dataset
-            #self.best_pred = checkpoint['best_pred']
+
             print('previous best = ', checkpoint['best_pred'])
 
             print("=> loaded checkpoint '{}' (epoch {})"
