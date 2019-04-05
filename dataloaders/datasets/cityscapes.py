@@ -8,7 +8,8 @@ from torchvision import transforms
 from dataloaders import custom_transforms as tr
 
 class CityscapesSegmentation(data.Dataset):
-    NUM_CLASSES = 19
+    #NUM_CLASSES = 19
+    NUM_CLASSES = 12
 
     def __init__(self, args, root=Path.db_root_dir('cityscapes'), split="train"):
 
@@ -22,12 +23,22 @@ class CityscapesSegmentation(data.Dataset):
 
         self.files[split] = self.recursive_glob(rootdir=self.images_base, suffix='.png')
 
-        self.void_classes = [0, 1, 2, 3, 4, 5, 6, 9, 10, 14, 15, 16, 18, 29, 30, -1]
-        self.valid_classes = [7, 8, 11, 12, 13, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 31, 32, 33]
+        #self.void_classes = [0, 1, 2, 3, 4, 5, 6, 9, 10, 14, 15, 16, 18, 29, 30, -1]
+        #self.valid_classes = [7, 8, 11, 12, 13, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 31, 32, 33]
+
+        self.void_classes = [0, 1, 2, 3, 4, 5, 13, 14, 17, 18, 19, 20, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, -1]
+        self.valid_classes = [6, 7, 8, 9, 10, 11, 12, 15, 16, 21, 22, 23]
+
+        """
         self.class_names = ['unlabelled', 'road', 'sidewalk', 'building', 'wall', 'fence', \
                             'pole', 'traffic_light', 'traffic_sign', 'vegetation', 'terrain', \
                             'sky', 'person', 'rider', 'car', 'truck', 'bus', 'train', \
                             'motorcycle', 'bicycle']
+        """
+
+        self.class_names = ['unlabelled', 'ground', 'road', 'sidewalk', 'parking', 'rail track', 'building', 'wall', \
+                            'bridge', 'tunnel', 'vegetation', 'terrain', \
+                            'sky']
 
         self.ignore_index = 255
         self.class_map = dict(zip(self.valid_classes, range(self.NUM_CLASSES)))
@@ -119,7 +130,8 @@ if __name__ == '__main__':
 
     cityscapes_train = CityscapesSegmentation(args, split='train')
 
-    dataloader = DataLoader(cityscapes_train, batch_size=2, shuffle=True, num_workers=2)
+    #dataloader = DataLoader(cityscapes_train, batch_size=2, shuffle=True, num_workers=2)
+    dataloader = DataLoader(cityscapes_train, batch_size=4, shuffle=True, num_workers=4)
 
     for ii, sample in enumerate(dataloader):
         for jj in range(sample["image"].size()[0]):
