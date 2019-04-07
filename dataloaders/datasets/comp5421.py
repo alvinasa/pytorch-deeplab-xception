@@ -31,8 +31,8 @@ class Comp5421Segmentation(Dataset):
         self.args = args
 
     def __getitem__(self, index):
-        _img, _target = self._make_img_gt_point_pair(index)
-        sample = {'image': _img, 'label': _target}
+        _img, _target, _img_id = self._make_img_gt_point_pair(index)
+        sample = {'image': _img, 'label': _target, 'imgId': _img_id}
 
         if self.split == "train":
             return self.transform_tr(sample)
@@ -45,7 +45,7 @@ class Comp5421Segmentation(Dataset):
         _img = Image.open(os.path.join(self.img_dir, "{}.png".format(img_id))).convert('RGB')
         _target = Image.open(os.path.join(self.label_dir, "{}.png".format(img_id))).convert('L')
 
-        return _img, _target
+        return _img, _target, img_id
 
     def transform_tr(self, sample):
         composed_transforms = transforms.Compose([
@@ -58,13 +58,16 @@ class Comp5421Segmentation(Dataset):
         return composed_transforms(sample)
 
     def transform_val(self, sample):
-
         composed_transforms = transforms.Compose([
             tr.FixScaleCrop(crop_size=self.args.crop_size),
             tr.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
             tr.ToTensor()])
 
-        return composed_transforms(sample)
+        transformed = composed_transforms(sample)
+        transformed['imgId'] = sample['imgId']
+        transformed['resolution'] = sample['image'].size
+
+        return transformed
 
 
     def __len__(self):
