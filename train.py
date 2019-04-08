@@ -7,16 +7,12 @@ from mypath import Path
 from dataloaders import make_data_loader
 from modeling.sync_batchnorm.replicate import patch_replication_callback
 from modeling.deeplab import *
-from loss import SegmentationLosses
-from calculate_weights import calculate_weigths_labels
-from lr_scheduler import LR_Scheduler
-from saver import Saver
-from summaries import TensorboardSummary
-from metrics import Evaluator
-
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
+from utils.loss import SegmentationLosses
+from utils.calculate_weights import calculate_weigths_labels
+from utils.lr_scheduler import LR_Scheduler
+from utils.saver import Saver
+from utils.summaries import TensorboardSummary
+from utils.metrics import Evaluator
 
 class Trainer(object):
     def __init__(self, args):
@@ -34,8 +30,7 @@ class Trainer(object):
         self.train_loader, self.val_loader, self.test_loader, self.nclass = make_data_loader(args, **kwargs)
 
         # Define network
-        pre_nclass = 21
-        model = DeepLab(num_classes=pre_nclass,
+        model = DeepLab(num_classes=self.nclass,
                         backbone=args.backbone,
                         output_stride=args.out_stride,
                         sync_bn=args.sync_bn,
@@ -68,40 +63,32 @@ class Trainer(object):
         self.scheduler = LR_Scheduler(args.lr_scheduler, args.lr,
                                             args.epochs, len(self.train_loader))
 
+        # Using cuda
+        if args.cuda:
+            self.model = torch.nn.DataParallel(self.model, device_ids=self.args.gpu_ids)
+            patch_replication_callback(self.model)
+            self.model = self.model.cuda()
+
         # Resuming checkpoint
         self.best_pred = 0.0
         if args.resume is not None:
             if not os.path.isfile(args.resume):
                 raise RuntimeError("=> no checkpoint found at '{}'" .format(args.resume))
-            checkpoint = torch.load(args.resume)
+            checkpoint = torch.load(args.resume, map_location='cpu')
             args.start_epoch = checkpoint['epoch']
-            
-            self.model.load_state_dict(checkpoint['state_dict'])
-
+            if args.cuda:
+                self.model.module.load_state_dict(checkpoint['state_dict'])
+            else:
+                self.model.load_state_dict(checkpoint['state_dict'])
             if not args.ft:
                 self.optimizer.load_state_dict(checkpoint['optimizer'])
-
-            print('previous best = ', checkpoint['best_pred'])
-
+            self.best_pred = checkpoint['best_pred']
             print("=> loaded checkpoint '{}' (epoch {})"
                   .format(args.resume, checkpoint['epoch']))
 
         # Clear start epoch if fine-tuning
         if args.ft:
             args.start_epoch = 0
-
-        # MODIFIED: change num_class back to tageted dataset
-        for param in model.parameters():
-            param.requires_grad = False
-
-        model.decoder.last_conv[8] = nn.Conv2d(256, self.nclass, kernel_size=1, stride=1)
-        torch.nn.init.kaiming_normal_(model.decoder.last_conv[8].weight)
-
-        # Using cuda
-        if args.cuda:
-            self.model = torch.nn.DataParallel(self.model, device_ids=self.args.gpu_ids)
-            patch_replication_callback(self.model)
-            self.model = self.model.cuda()
 
     def training(self, epoch):
         train_loss = 0.0
@@ -167,17 +154,19 @@ class Trainer(object):
         Acc_class = self.evaluator.Pixel_Accuracy_Class()
         mIoU = self.evaluator.Mean_Intersection_over_Union()
         FWIoU = self.evaluator.Frequency_Weighted_Intersection_over_Union()
+        MIIoU = self.evaluator.Mean_Independent_Intersection_over_Union()
         self.writer.add_scalar('val/total_loss_epoch', test_loss, epoch)
         self.writer.add_scalar('val/mIoU', mIoU, epoch)
         self.writer.add_scalar('val/Acc', Acc, epoch)
         self.writer.add_scalar('val/Acc_class', Acc_class, epoch)
         self.writer.add_scalar('val/fwIoU', FWIoU, epoch)
+        self.writer.add_scalar('val/miIoU', MIIoU, epoch)
         print('Validation:')
         print('[Epoch: %d, numImages: %5d]' % (epoch, i * self.args.batch_size + image.data.shape[0]))
         print("Acc:{}, Acc_class:{}, mIoU:{}, fwIoU: {}".format(Acc, Acc_class, mIoU, FWIoU))
         print('Loss: %.3f' % test_loss)
 
-        new_pred = mIoU
+        new_pred = MIIoU
         if new_pred > self.best_pred:
             is_best = True
             self.best_pred = new_pred
@@ -307,12 +296,10 @@ def main():
     trainer = Trainer(args)
     print('Starting Epoch:', trainer.args.start_epoch)
     print('Total Epoches:', trainer.args.epochs)
-    
     for epoch in range(trainer.args.start_epoch, trainer.args.epochs):
         trainer.training(epoch)
         if not trainer.args.no_val and epoch % args.eval_interval == (args.eval_interval - 1):
             trainer.validation(epoch)
-    
 
     trainer.writer.close()
 
