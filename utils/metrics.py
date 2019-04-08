@@ -32,10 +32,17 @@ class Evaluator(object):
         return FWIoU
 
     def Mean_Independent_Intersection_over_Union(self):
-        catFreq = np.sum(self.confusion_matrix, axis=1)
-        IIoU = np.diag(self.confusion_matrix) / catFreq
-        MIIoU = np.nanmean(IIoU)
-        return MIIoU
+        pos = self.confusion_matrix.sum(1)
+        res = self.confusion_matrix.sum(0)
+        tp = np.diag(self.confusion_matrix)
+
+        IU_array = (tp / np.maximum(1.0, pos + res - tp))
+        mean_IU = IU_array.mean()
+
+        # catFreq = np.sum(self.confusion_matrix, axis=1)
+        # IIoU = np.diag(self.confusion_matrix) / catFreq
+        # MIIoU = np.nanmean(IIoU)
+        return mean_IU
 
     def _generate_matrix(self, gt_image, pre_image):
         mask = (gt_image >= 0) & (gt_image < self.num_class)
